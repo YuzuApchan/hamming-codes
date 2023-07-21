@@ -1,6 +1,3 @@
-# Binary files
-*
-!*.*
 
 # VS code config folder
 .vscode/
@@ -10,3 +7,5 @@
 
 # Text input files
 *.txt
+
+build/**

@@ -26,7 +26,7 @@ void usage(char *path)
     printf("\nUsage: %s [COMMANDS]\n\n\tencode \tEncodes plaintext to hamming code\n\t\t-i \"FILENAME\" \tReads plaintext from file FILENAME (default is \"in.txt\")\n\t\t-o \"TEXT\" \tTEXT is read as plaintext input (file input is default)\n\t\t-o \"FILENAME\" \tOutputs hamming code to file FILENAME (default is \"out.hm\")\n\n\tdecode \tDecodes hamming code and prints original plaintext\n\t\t-i \"FILENAME\" \tReads hamming code from file FILENAME (default is \"out.hm\")\n\t\t-o \"FILENAME\" \tOutputs hamming code to file FILENAME (default is \"out.txt\")\n\n", path);
 }
 
-int main(int argc, char **argv)
+int main_backup(int argc, char **argv)
 {
 
     // Path of file //
@@ -236,6 +236,15 @@ int main(int argc, char **argv)
     return 0;
 }
 
+int main(int argc, char const *argv[])
+{
+    char data[] = {0xF, 0xF, 0xF, 0xF};
+    encode(data, 24, NULL);
+    return 0;
+}
+
+
+
 /**
  * @brief 编码
  *
@@ -352,7 +361,7 @@ void encode(char *input, int len, FILE *ptr)
     }
 
     // Write encoded message to file //
-    fwrite(encoded, sizeof(block), blocks + 1, ptr);
+    // fwrite(encoded, sizeof(block), blocks + 1, ptr);
 }
 
 void decode(block input[], int len, FILE *ptr)
@@ -543,9 +552,9 @@ void printBlock(block i)
     {
         putchar(str[i]);
         putchar(' ');
-        if (i % 4 == 3)
-        {
-            putchar('\n');
-        }
+        // if (i % 4 == 3)
+        // {
+        //     putchar('\n');
+        // }
     }
 }
