@@ -20,11 +20,40 @@ typedef struct Block
     uint64_t blockNum;
 } Block_t;
 
-// Function prototypes
+/**
+ * @brief 解码
+ * 此处存在两种索引方式
+ * 先通过 @see https://github.com/YuzuApchan/hamming-codes 快速计算误差比特的位置
+ * @param input encoded data
+ * @param blockNum 帧数量
+ * @param ptr 保存解码后的 Message Bit (32位变量的低24位)
+ */
 void decode(block *input, uint64_t blockNum, Block_t *ptr); // Function used to decode Hamming code
-void encode(uint32_t *input, int len, Block_t *ptr);        // Function used to encode plaintext
-void printBlock(block i);                                   // Function used to pretty print a block
-int multipleXor(uint8_t *indicies, uint8_t len);            // Function used to XOR all the elements of a list together (used to locate error and determine values of parity bits)
+
+/**
+ * @brief 编码
+ *
+ * @param input 输入的 Message，不应超过 30 bit，即最高位和次高位必须为0
+ * @param len 输入 Message 数量
+ * @param ptr 编码结果保存到的结构体
+ */
+void encode(uint32_t *input, int len, Block_t *ptr); // Function used to encode plaintext
+
+/**
+ * @brief 打印 block，包括二进制（大端序）和16进制
+ *
+ * @param i
+ */
+void printBlock(block i); // Function used to pretty print a block
+
+/**
+ * @brief 一串异或计算误比特的索引、检验bit
+ * 详见 @see https://github.com/YuzuApchan/hamming-codes
+ * @param indicies
+ * @param len
+ * @return int
+ */
+int multipleXor(uint8_t *indicies, uint8_t len); // Function used to XOR all the elements of a list together (used to locate error and determine values of parity bits)
 
 int main(int argc, char const *argv[])
 {
@@ -33,10 +62,11 @@ int main(int argc, char const *argv[])
 
     uint32_t data[] = {0xFFFFFF, 0x000007};
     Block_t myBlock;
+    Block_t resultBlock;
     encode(data, 2 * MESSAGE_BITS_PER_BLOCK / 8, &myBlock);
 
     printf("\nDecode --- No Error Bits:\n");
-    // decode(myBlock.blockArray, myBlock.blockNum, NULL);
+    decode(myBlock.blockArray, myBlock.blockNum, &resultBlock);
 
     printf("\nDecode --- One Error Bit:\n");
     uint32_t temp1 = myBlock.blockArray[0];
@@ -50,7 +80,7 @@ int main(int argc, char const *argv[])
             // uint32_t errorBitIndex = 0;
             myBlock.blockArray[i] ^= (1 << (errorBitIndex));
         }
-        decode(myBlock.blockArray, myBlock.blockNum, NULL);
+        decode(myBlock.blockArray, myBlock.blockNum, &resultBlock);
         assert(temp1 == myBlock.blockArray[0]);
         assert(temp2 == myBlock.blockArray[1]);
     }
@@ -63,7 +93,7 @@ int main(int argc, char const *argv[])
             // uint32_t errorBitIndex = 0;
             myBlock.blockArray[i] ^= (1 << (errorBitIndex));
         }
-        decode(myBlock.blockArray, myBlock.blockNum, NULL);
+        decode(myBlock.blockArray, myBlock.blockNum, &resultBlock);
         assert(temp1 == myBlock.blockArray[0]);
         assert(temp2 == myBlock.blockArray[1]);
     }
@@ -78,7 +108,7 @@ int main(int argc, char const *argv[])
         // errorBitIndex = 3;
         myBlock.blockArray[i] ^= (1 << (errorBitIndex));
     }
-    decode(myBlock.blockArray, myBlock.blockNum, NULL);
+    decode(myBlock.blockArray, myBlock.blockNum, &resultBlock);
 
     return 0;
 }
@@ -97,7 +127,7 @@ void encode(uint32_t *input, int len, Block_t *ptr)
     {
         assert(input[inputIndex] < 0xC0000000);
     }
-    
+
     int blockNum = ceil((float)len * 8 / MESSAGE_BITS_PER_BLOCK);
 
     // block blockArray[blockNum];
@@ -164,15 +194,16 @@ void encode(uint32_t *input, int len, Block_t *ptr)
 
 /**
  * @brief 解码
- * 
+ * 此处存在两种索引方式
+ * 先通过 @see https://github.com/YuzuApchan/hamming-codes 快速计算误差比特的位置
  * @param input encoded data
  * @param blockNum 帧数量
- * @param ptr 暂时无用
+ * @param ptr 保存解码后的 Message Bit (32位变量的低24位)
  */
 void decode(block *input, uint64_t blockNum, Block_t *ptr)
 {
-    char *decodedResult = (char *)malloc(sizeof(char) * (MESSAGE_BITS_PER_BLOCK / 8) * blockNum + 1);
-    memset(decodedResult, 0, sizeof(char) * (MESSAGE_BITS_PER_BLOCK / 8) * blockNum + 1);
+    block *decodeResult = (block *)malloc(sizeof(block) * blockNum);
+    memset(decodeResult, 0, sizeof(block) * blockNum);
     for (uint64_t blockIndex = 0; blockIndex < blockNum; blockIndex++)
     {
         printf("On Block %d:\n", blockIndex);
@@ -184,7 +215,7 @@ void decode(block *input, uint64_t blockNum, Block_t *ptr)
         const uint32_t mask = 0x1;
         uint8_t skip = 2;
         // 此处存在两种索引方式
-        // 先通过 /see https://github.com/YuzuApchan/hamming-codes 快速计算误差比特的位置
+        // 先通过 @see https://github.com/YuzuApchan/hamming-codes 快速计算误差比特的位置
         for (uint8_t bitIndex = 0; bitIndex < MESSAGE_BITS_PER_BLOCK; bitIndex++)
         {
             uint8_t position = bitIndex + 1 + skip;
@@ -216,8 +247,7 @@ void decode(block *input, uint64_t blockNum, Block_t *ptr)
             if (0 == (oneCount & 1) ^ ((input[blockIndex] >> (MESSAGE_BITS_PER_BLOCK)) & mask))
             {
                 printf("More than one error detected.\n");
-                memset(decodedResult + blockIndex * MESSAGE_BITS_PER_BLOCK / 8,
-                       '-', MESSAGE_BITS_PER_BLOCK / 8);
+                decodeResult[blockIndex] = ~0x0; // 32 位全 1 表示不能正确解码
             }
             else
             {
@@ -232,19 +262,18 @@ void decode(block *input, uint64_t blockNum, Block_t *ptr)
                 printf("Detected error at position %d, flipping bit.\n", errorLocation);
                 input[blockIndex] = input[blockIndex] ^ (1 << errorLocation);
                 printBlock(input[blockIndex]);
-                memcpy(&decodedResult[blockIndex * MESSAGE_BITS_PER_BLOCK / 8],
-                       &input[blockIndex], MESSAGE_BITS_PER_BLOCK / 8);
+                memcpy(&decodeResult[blockIndex], &input[blockIndex], MESSAGE_BITS_PER_BLOCK / 8);
             }
         }
         else
         {
             printf("No error detected.\n");
             printBlock(input[blockIndex]);
-            memcpy(&decodedResult[blockIndex * MESSAGE_BITS_PER_BLOCK / 8],
-                   &input[blockIndex], MESSAGE_BITS_PER_BLOCK / 8);
+            memcpy(&decodeResult[blockIndex], &input[blockIndex], MESSAGE_BITS_PER_BLOCK / 8);
         }
     }
-    printf("Decoded hamming code:%x\n", decodedResult);
+    ptr->blockNum = blockNum;
+    ptr->blockArray = decodeResult;
 }
 
 /**
@@ -273,8 +302,8 @@ int multipleXor(uint8_t *indicies, uint8_t len)
 
 /**
  * @brief 打印 block，包括二进制（大端序）和16进制
- * 
- * @param i 
+ *
+ * @param i
  */
 void printBlock(block i)
 {
